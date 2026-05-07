@@ -4,7 +4,7 @@
 
 This repository verifies the download link for [emeditor.com](https://www.emeditor.com/).
 
-Every 10 minutes, `main.go` is executed to:
+Every 1 hour at most, `main.go` is executed to:
 1. Navigate to the [download page](https://www.emeditor.com/download/).
 2. Locate and download the installer file.
 3. Validate the digital signature using `Get-AuthenticodeSignature`.
