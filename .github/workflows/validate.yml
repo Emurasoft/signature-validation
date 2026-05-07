@@ -4,6 +4,8 @@ on:
   schedule:
     # Offset to avoid peak times
     - cron: '58 */2 * * *'
+  push:
+    - 'ci'
 
 jobs:
   validate:
