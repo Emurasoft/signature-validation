@@ -5,7 +5,7 @@ on:
     # Offset to avoid peak times
     - cron: '58 */2 * * *'
   push:
-    - 'ci'
+    branches: [ 'ci' ]
 
 jobs:
   validate:
