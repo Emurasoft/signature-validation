@@ -43,7 +43,7 @@ jobs:
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: go run github.com/playwright-community/playwright-go/cmd/playwright@v0.5700.1 install --with-deps chromium
+        run: go run github.com/playwright-community/playwright-go/cmd/playwright@v0.5700.1 install --with-deps --only-shell chromium
 
       - name: Run validation
         id: run_validation
