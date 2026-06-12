@@ -8,6 +8,7 @@ import (
 	"slices"
 )
 
+//nolint:unused
 var skipCheck = map[string]bool{
 	"msvcp140.dll":               true,
 	"vcruntime140.dll":           true,
@@ -21,6 +22,8 @@ var skipCheck = map[string]bool{
 
 // (EXE, DLL) and validates that it is signed by Emurasoft, Inc. with a valid
 // X.509 certificate chain. Returns an error describing what failed, or nil if the signature is valid.
+//
+//nolint:unused
 func ValidatePESignature(r io.ReadSeeker) error {
 	sigs, err := authenticode.VerifyPE(r, false)
 	if err != nil {
