@@ -10,7 +10,6 @@ import (
 	"slices"
 )
 
-//nolint:unused
 var skipCheck = map[string]bool{
 	"msvcp140.dll":               true,
 	"vcruntime140.dll":           true,
@@ -34,10 +33,8 @@ func getRootCertPool() (*x509.CertPool, error) {
 	pem := os.Getenv("R3CSR45CROSS2020")
 	if pem == "" {
 		fmt.Fprintln(os.Stderr, "R3CSR45CROSS2020 variable not set")
-	} else {
-		if !roots.AppendCertsFromPEM([]byte(pem)) {
-			return nil, errors.New("failed to parse R3CSR45CROSS2020 certificate")
-		}
+	} else if !roots.AppendCertsFromPEM([]byte(pem)) {
+		return nil, errors.New("failed to parse R3CSR45CROSS2020 certificate")
 	}
 	return roots, nil
 }
