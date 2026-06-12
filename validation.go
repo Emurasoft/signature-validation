@@ -41,7 +41,7 @@ func ValidatePESignature(r io.ReadSeeker) error {
 			return errors.Errorf("signature %d has no certificate", i)
 		}
 		if err := sig.VerifyChain(roots, nil, x509.ExtKeyUsageCodeSigning); err != nil {
-			return errors.WithStack(err)
+			return errors.WithMessagef(err, "signature %d: verify chain", i)
 		}
 		if err := validateSubject(sig.Certificate); err != nil {
 			return errors.WithMessagef(err, "signature %d", i)
@@ -69,7 +69,7 @@ func ValidateMSISignature(r io.ReaderAt) error {
 	}
 
 	if err := sig.VerifyChain(roots, nil, x509.ExtKeyUsageCodeSigning); err != nil {
-		return errors.WithStack(err)
+		return errors.WithMessage(err, "verify chain")
 	}
 
 	if err := validateSubject(sig.Certificate); err != nil {
