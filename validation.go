@@ -42,8 +42,18 @@ func ValidatePESignature(r io.ReadSeeker) error {
 		if err := sig.VerifyChain(roots, nil, x509.ExtKeyUsageCodeSigning); err != nil {
 			return errors.WithStack(err)
 		}
-		if !slices.Contains(sig.Certificate.Subject.Organization, "Emurasoft, Inc.") {
+		cert := sig.Certificate
+		if !slices.Contains(cert.Subject.Organization, "Emurasoft, Inc.") {
 			return errors.Errorf("signature %d not signed by Emurasoft, Inc.", i)
+		}
+		if cert.Subject.CommonName != "Emurasoft, Inc." {
+			return errors.Errorf("signature %d has unexpected CommonName: %s", i, cert.Subject.CommonName)
+		}
+		if !slices.Contains(cert.Subject.Province, "Washington") {
+			return errors.Errorf("signature %d has unexpected State/Province: %v", i, cert.Subject.Province)
+		}
+		if !slices.Contains(cert.Subject.Country, "US") {
+			return errors.Errorf("signature %d has unexpected Country: %v", i, cert.Subject.Country)
 		}
 	}
 
@@ -71,8 +81,18 @@ func ValidateMSISignature(r io.ReaderAt) error {
 		return errors.WithStack(err)
 	}
 
-	if !slices.Contains(sig.Certificate.Subject.Organization, "Emurasoft, Inc.") {
+	cert := sig.Certificate
+	if !slices.Contains(cert.Subject.Organization, "Emurasoft, Inc.") {
 		return errors.New("MSI not signed by Emurasoft, Inc.")
+	}
+	if cert.Subject.CommonName != "Emurasoft, Inc." {
+		return errors.Errorf("MSI has unexpected CommonName: %s", cert.Subject.CommonName)
+	}
+	if !slices.Contains(cert.Subject.Province, "Washington") {
+		return errors.Errorf("MSI has unexpected State/Province: %v", cert.Subject.Province)
+	}
+	if !slices.Contains(cert.Subject.Country, "US") {
+		return errors.Errorf("MSI has unexpected Country: %v", cert.Subject.Country)
 	}
 
 	return nil
