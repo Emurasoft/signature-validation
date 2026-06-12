@@ -146,10 +146,7 @@ func mainWithError() (*ValidationResult, error) {
 		result = ValidationResult{Valid: true}
 	}
 
-	// Clean up
-	if err := os.Remove(path); err != nil {
-		return nil, errors.WithStack(err)
-	}
+	// Since it is run in CI and files are saved to temporary directory, the files are not removed at the end
 	return &result, nil
 }
 
