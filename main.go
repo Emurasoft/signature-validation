@@ -163,8 +163,7 @@ func ValidateZipArchive(path string) (*ValidationResult, error) {
 	ctx := context.Background()
 	var failures []string
 
-	var format archives.Zip
-	if err := format.Extract(ctx, f, func(ctx context.Context, info archives.FileInfo) error {
+	err = archives.Zip{}.Extract(ctx, f, func(ctx context.Context, info archives.FileInfo) error {
 		name := info.NameInArchive
 		ext := strings.ToLower(filepath.Ext(name))
 
@@ -204,7 +203,8 @@ func ValidateZipArchive(path string) (*ValidationResult, error) {
 
 		fmt.Fprintf(os.Stderr, "OK: %s\n", name)
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, errors.WithMessage(err, "failed to extract archive")
 	}
 
