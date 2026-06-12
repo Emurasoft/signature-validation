@@ -43,7 +43,7 @@ func ValidatePESignature(r io.ReadSeeker) error {
 			return errors.WithStack(err)
 		}
 		if err := validateSubject(sig.Certificate); err != nil {
-			return errors.Errorf("signature %d: %w", i, err)
+			return errors.WithMessagef(err, "signature %d", i)
 		}
 	}
 
@@ -72,7 +72,7 @@ func ValidateMSISignature(r io.ReaderAt) error {
 	}
 
 	if err := validateSubject(sig.Certificate); err != nil {
-		return errors.Errorf("MSI: %w", err)
+		return errors.WithStack(err)
 	}
 
 	return nil
