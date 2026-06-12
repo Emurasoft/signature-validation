@@ -162,7 +162,7 @@ type ValidationResult struct {
 func mainWithError() (*ValidationResult, error) {
 	fmt.Fprintf(os.Stderr, "Getting download link\n")
 
-	downloadURL, err := GetInstallerDownloadLink()
+	downloadURL, err := GetPortableDownloadLink()
 	if err != nil {
 		return nil, err
 	}
