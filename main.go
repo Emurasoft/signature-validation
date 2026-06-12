@@ -170,24 +170,24 @@ func mainWithError() (*ValidationResult, error) {
 	fmt.Printf("Download link: %s\n", downloadURL)
 	fmt.Fprintf(os.Stderr, "Downloading from %s\n", downloadURL)
 
-	return &ValidationResult{Valid: true}, nil
+	path, err := downloadToTemp(downloadURL)
+	if err != nil {
+		return nil, err
+	}
 
-	//path, err := downloadToTemp(downloadURL)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//fmt.Fprintf(os.Stderr, "File downloaded to: %s\n", path)
-	//
-	//f, err := os.Open(path)
-	//if err != nil {
-	//	return nil, errors.WithStack(err)
-	//}
-	//defer func() {
-	//	if err := f.Close(); err != nil {
-	//		fmt.Fprintln(os.Stderr, err)
-	//	}
-	//}()
+	fmt.Fprintf(os.Stderr, "File downloaded to: %s\n", path)
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+	}()
+
+	return &ValidationResult{Valid: true}, nil
 	//
 	//var result ValidationResult
 	//if err := ValidateMSISignature(f); err != nil {
