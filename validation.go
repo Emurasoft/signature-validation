@@ -8,7 +8,6 @@ import (
 	"slices"
 )
 
-//nolint:unused
 var skipCheck = map[string]bool{
 	"msvcp140.dll":               true,
 	"vcruntime140.dll":           true,
