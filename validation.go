@@ -5,6 +5,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sassoftware/relic/lib/authenticode"
 	"io"
+	"os"
 	"slices"
 )
 
@@ -20,6 +21,25 @@ var skipCheck = map[string]bool{
 	"zlib1.dll":                  true,
 }
 
+// getRootCertPool returns a root CA pool built from the certificate in the
+// R3CSR45CROSS2020 environment variable. When the env var is unset it falls
+// back to the system pool.
+func getRootCertPool() (*x509.CertPool, error) {
+	pem := os.Getenv("R3CSR45CROSS2020")
+	if pem == "" {
+		return nil, errors.New("R3CSR45CROSS2020 not set")
+	}
+
+	roots, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if !roots.AppendCertsFromPEM([]byte(pem)) {
+		return nil, errors.New("failed to parse R3CSR45CROSS2020 certificate")
+	}
+	return roots, nil
+}
+
 // (EXE, DLL) and validates that it is signed by Emurasoft, Inc. with a valid
 // X.509 certificate chain. Returns an error describing what failed, or nil if the signature is valid.
 func ValidatePESignature(r io.ReadSeeker) error {
@@ -31,9 +51,9 @@ func ValidatePESignature(r io.ReadSeeker) error {
 		return errors.New("PE file has no signatures")
 	}
 
-	roots, err := x509.SystemCertPool()
+	roots, err := getRootCertPool()
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	for i, sig := range sigs {
@@ -63,9 +83,9 @@ func ValidateMSISignature(r io.ReaderAt) error {
 		return errors.New("MSI signature has no certificate")
 	}
 
-	roots, err := x509.SystemCertPool()
+	roots, err := getRootCertPool()
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	if err := sig.VerifyChain(roots, nil, x509.ExtKeyUsageCodeSigning); err != nil {
