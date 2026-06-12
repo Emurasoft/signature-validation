@@ -32,8 +32,11 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: go run github.com/playwright-community/playwright-go/cmd/playwright@v0.5700.1 install --with-deps --only-shell chromium
 
-      - name: Get CA certs
-        run: sudo apt-get install -y ca-certificates
+      - name: Install CA certificate
+        run: |
+          echo "${{ secrets.R3CSR45CROSS2020 }}" > /tmp/ca-cert.pem
+          sudo cp /tmp/ca-cert.pem /usr/local/share/ca-certificates/custom-ca.crt
+          sudo update-ca-certificates
 
       - name: Run program
         run: go run .
