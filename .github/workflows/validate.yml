@@ -5,7 +5,6 @@ on:
     # Offset to avoid peak times
     - cron: '58 */2 * * *'
   push:
-    branches: [ 'ci' ]
 
 jobs:
   validate:
@@ -114,7 +113,7 @@ jobs:
             });
 
       - name: Create issue on failed validation
-        if: ${{ steps.parse_result.outputs.error_occurred == 'True' || steps.parse_result.outputs.validation_failed == 'True' }}
+        if: ${{ github.event_name != 'push' && (steps.parse_result.outputs.error_occurred == 'True' || steps.parse_result.outputs.validation_failed == 'True') }}
         uses: actions/github-script@v9
         env:
           VALIDATION_REASON:   ${{ steps.parse_result.outputs.validation_reason }}
