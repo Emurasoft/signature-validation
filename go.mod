@@ -6,6 +6,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/playwright-community/playwright-go v0.5700.1
 	github.com/sassoftware/relic v7.2.1+incompatible
+	golang.org/x/net v0.56.0
 )
 
 require (

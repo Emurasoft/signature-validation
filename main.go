@@ -6,10 +6,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/playwright-community/playwright-go"
+	"golang.org/x/net/html"
 )
 
 // ClickEmEditorDownload navigates to https://www.emeditor.com/,
@@ -63,6 +65,54 @@ func GetInstallerDownloadLink() (string, error) {
 	return ClickEmEditorDownload(page)
 }
 
+// GetPortableDownloadLink scrapes the EmEditor download page for the Portable Version
+// download link and returns its href URL.
+func GetPortableDownloadLink() (string, error) {
+	resp, err := client.Get("https://www.emeditor.com/download/")
+	if err != nil {
+		return "", errors.WithMessage(err, "failed to fetch download page")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.Errorf("bad status: %s", resp.Status)
+	}
+
+	doc, err := html.Parse(resp.Body)
+	if err != nil {
+		return "", errors.WithMessage(err, "failed to parse HTML")
+	}
+
+	href, found := findPortableLink(doc)
+	if !found {
+		return "", errors.New("portable version link not found on download page")
+	}
+
+	return href, nil
+}
+
+// findPortableLink traverses the HTML tree looking for the anchor element
+// that links to the Portable Version download page.
+func findPortableLink(n *html.Node) (string, bool) {
+	if n.Type == html.ElementNode && n.Data == "a" {
+		for _, attr := range n.Attr {
+			if attr.Key == "href" && strings.Contains(attr.Val, "/en/downloads/latest/portable") {
+				if n.FirstChild != nil && n.FirstChild.Type == html.TextNode && strings.Contains(n.FirstChild.Data, "Portable Version") {
+					return attr.Val, true
+				}
+			}
+		}
+	}
+
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if href, found := findPortableLink(c); found {
+			return href, found
+		}
+	}
+
+	return "", false
+}
+
 var client = &http.Client{
 	Timeout: 20 * time.Second,
 }
@@ -112,14 +162,15 @@ type ValidationResult struct {
 func mainWithError() (*ValidationResult, error) {
 	fmt.Fprintf(os.Stderr, "Getting download link\n")
 
-	return &ValidationResult{Valid: true}, nil
+	downloadURL, err := GetInstallerDownloadLink()
+	if err != nil {
+		return nil, err
+	}
 
-	//downloadURL, err := GetInstallerDownloadLink()
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//fmt.Fprintf(os.Stderr, "Downloading from %s\n", downloadURL)
+	fmt.Printf("Download link: %s\n", downloadURL)
+	fmt.Fprintf(os.Stderr, "Downloading from %s\n", downloadURL)
+
+	return &ValidationResult{Valid: true}, nil
 
 	//path, err := downloadToTemp(downloadURL)
 	//if err != nil {
