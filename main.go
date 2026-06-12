@@ -222,13 +222,18 @@ type ValidationResult struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-func mainWithError() (*ValidationResult, *ValidationResult, error) {
+type Result struct {
+	InstallerResult *ValidationResult `json:"installer_result,omitempty"`
+	PortableResult  *ValidationResult `json:"portable_result,omitempty"`
+}
+
+func mainWithError() (*Result, error) {
 	// --- Installer (MSI) check ---
 	fmt.Fprintf(os.Stderr, "Getting installer download link\n")
 
 	installerURL, err := GetInstallerDownloadLink()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	fmt.Printf("Installer download link: %s\n", installerURL)
@@ -236,14 +241,14 @@ func mainWithError() (*ValidationResult, *ValidationResult, error) {
 
 	installerPath, err := downloadToTemp(installerURL)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	fmt.Fprintf(os.Stderr, "Installer downloaded to: %s\n", installerPath)
 
 	installerFile, err := os.Open(installerPath)
 	if err != nil {
-		return nil, nil, errors.WithMessage(err, "failed to open installer file")
+		return nil, errors.WithMessage(err, "failed to open installer file")
 	}
 
 	installerResult := &ValidationResult{Valid: true}
@@ -262,7 +267,7 @@ func mainWithError() (*ValidationResult, *ValidationResult, error) {
 
 	downloadURL, err := GetPortableDownloadLink()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	fmt.Printf("Portable download link: %s\n", downloadURL)
@@ -270,14 +275,14 @@ func mainWithError() (*ValidationResult, *ValidationResult, error) {
 
 	path, err := downloadToTemp(downloadURL)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	fmt.Fprintf(os.Stderr, "Portable downloaded to: %s\n", path)
 
 	portableResult, err := ValidateZipArchive(path)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if !portableResult.Valid {
 		fmt.Fprintf(os.Stderr, "FAIL: portable ZIP: %s\n", portableResult.Reason)
@@ -285,18 +290,20 @@ func mainWithError() (*ValidationResult, *ValidationResult, error) {
 		fmt.Fprintf(os.Stderr, "OK: portable signatures valid\n")
 	}
 
-	return installerResult, portableResult, nil
+	return &Result{
+		InstallerResult: installerResult,
+		PortableResult:  portableResult,
+	}, nil
 }
 
 type ProgramOutput struct {
-	InstallerResult *ValidationResult `json:"installer_result,omitempty"`
-	PortableResult  *ValidationResult `json:"portable_result,omitempty"`
-	Error           string            `json:"error,omitempty"`
-	Time            time.Time         `json:"time"`
+	*Result
+	Error string    `json:"error,omitempty"`
+	Time  time.Time `json:"time"`
 }
 
 func main() {
-	installerResult, portableResult, err := mainWithError()
+	result, err := mainWithError()
 	output := ProgramOutput{
 		Time: time.Now().UTC(),
 	}
@@ -305,8 +312,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %+v\n", err)
 	} else {
 		// If validation failed, do not return non-zero code to ensure issue is created.
-		output.InstallerResult = installerResult
-		output.PortableResult = portableResult
+		output.Result = result
 	}
 
 	if err := json.NewEncoder(os.Stdout).Encode(output); err != nil {
