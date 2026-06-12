@@ -1,14 +1,18 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/mholt/archives"
 	"github.com/pkg/errors"
 	"github.com/playwright-community/playwright-go"
 	"golang.org/x/net/html"
@@ -177,30 +181,68 @@ func mainWithError() (*ValidationResult, error) {
 
 	fmt.Fprintf(os.Stderr, "File downloaded to: %s\n", path)
 
+	// Open the downloaded ZIP file
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-		}
-	}()
+	defer f.Close()
 
-	return &ValidationResult{Valid: true}, nil
-	//
-	//var result ValidationResult
-	//if err := ValidateMSISignature(f); err != nil {
-	//	result = ValidationResult{
-	//		Valid:  false,
-	//		Reason: err.Error(),
-	//	}
-	//} else {
-	//	result = ValidationResult{Valid: true}
-	//}
-	//
-	//// Since it is run in CI and files are saved to temporary directory, the files are not removed at the end
-	//return &result, nil
+	ctx := context.Background()
+	var failures []string
+
+	var format archives.Zip
+	if err := format.Extract(ctx, f, func(ctx context.Context, info archives.FileInfo) error {
+		name := info.NameInArchive
+		ext := strings.ToLower(filepath.Ext(name))
+
+		// Skip non-PE files
+		if ext != ".exe" && ext != ".dll" {
+			fmt.Fprintf(os.Stderr, "Skipping %s (not PE)\n", name)
+			return nil
+		}
+
+		// Skip files in skipCheck
+		if skipCheck[filepath.Base(name)] {
+			fmt.Fprintf(os.Stderr, "Skipping %s (in skipCheck)\n", name)
+			return nil
+		}
+
+		// Open the file from the archive
+		rc, err := info.Open()
+		if err != nil {
+			return errors.WithMessagef(err, "failed to open %s", name)
+		}
+		defer rc.Close()
+
+		// Read content into memory (ValidatePESignature needs io.ReadSeeker)
+		content, err := io.ReadAll(rc)
+		if err != nil {
+			return errors.WithMessagef(err, "failed to read %s", name)
+		}
+
+		// Validate PE signature
+		reader := bytes.NewReader(content)
+		if err := ValidatePESignature(reader); err != nil {
+			msg := fmt.Sprintf("%s: %v", name, err)
+			fmt.Fprintf(os.Stderr, "FAIL: %s\n", msg)
+			failures = append(failures, msg)
+			return nil // keep processing the rest
+		}
+
+		fmt.Fprintf(os.Stderr, "OK: %s\n", name)
+		return nil
+	}); err != nil {
+		return nil, errors.WithMessage(err, "failed to extract archive")
+	}
+
+	result := &ValidationResult{Valid: true}
+	if len(failures) > 0 {
+		result.Valid = false
+		result.Reason = strings.Join(failures, "; ")
+	}
+
+	return result, nil
 }
 
 type ProgramOutput struct {
