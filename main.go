@@ -165,6 +165,7 @@ func main() {
 		output.Error = err.Error()
 		fmt.Fprintf(os.Stderr, "error: %+v\n", err)
 	} else {
+		// If validation failed, do not return non-zero code to ensure issue is created.
 		output.Result = result
 	}
 

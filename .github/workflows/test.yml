@@ -33,4 +33,6 @@ jobs:
         run: go run github.com/playwright-community/playwright-go/cmd/playwright@v0.5700.1 install --with-deps --only-shell chromium
 
       - name: Run program
+        env:
+          R3CSR45CROSS2020: ${{ secrets.R3CSR45CROSS2020 }}
         run: go run .
