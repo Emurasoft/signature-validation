@@ -223,28 +223,77 @@ type ValidationResult struct {
 }
 
 func mainWithError() (*ValidationResult, error) {
-	fmt.Fprintf(os.Stderr, "Getting download link\n")
+	var failures []string
+
+	// --- Installer (MSI) check ---
+	fmt.Fprintf(os.Stderr, "Getting installer download link\n")
+
+	installerURL, err := GetInstallerDownloadLink()
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Installer download link: %s\n", installerURL)
+	fmt.Fprintf(os.Stderr, "Downloading installer from %s\n", installerURL)
+
+	installerPath, err := downloadToTemp(installerURL)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Fprintf(os.Stderr, "Installer downloaded to: %s\n", installerPath)
+
+	installerFile, err := os.Open(installerPath)
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to open installer file")
+	}
+
+	fmt.Fprintf(os.Stderr, "Validating installer MSI signature\n")
+	if err := ValidateMSISignature(installerFile); err != nil {
+		msg := fmt.Sprintf("installer MSI: %v", err)
+		fmt.Fprintf(os.Stderr, "FAIL: %s\n", msg)
+		failures = append(failures, msg)
+	} else {
+		fmt.Fprintf(os.Stderr, "OK: installer signature valid\n")
+	}
+	installerFile.Close()
+
+	// --- Portable (ZIP) check ---
+	fmt.Fprintf(os.Stderr, "Getting portable download link\n")
 
 	downloadURL, err := GetPortableDownloadLink()
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("Download link: %s\n", downloadURL)
-	fmt.Fprintf(os.Stderr, "Downloading from %s\n", downloadURL)
+	fmt.Printf("Portable download link: %s\n", downloadURL)
+	fmt.Fprintf(os.Stderr, "Downloading portable from %s\n", downloadURL)
 
 	path, err := downloadToTemp(downloadURL)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Fprintf(os.Stderr, "File downloaded to: %s\n", path)
+	fmt.Fprintf(os.Stderr, "Portable downloaded to: %s\n", path)
 
-	result, err := ValidateZipArchive(path)
+	zipResult, err := ValidateZipArchive(path)
 	if err != nil {
 		return nil, err
 	}
+	if !zipResult.Valid {
+		msg := fmt.Sprintf("portable ZIP: %s", zipResult.Reason)
+		fmt.Fprintf(os.Stderr, "FAIL: %s\n", msg)
+		failures = append(failures, msg)
+	} else {
+		fmt.Fprintf(os.Stderr, "OK: portable signatures valid\n")
+	}
 
+	// --- Aggregate results ---
+	result := &ValidationResult{Valid: true}
+	if len(failures) > 0 {
+		result.Valid = false
+		result.Reason = strings.Join(failures, "; ")
+	}
 	return result, nil
 }
 
