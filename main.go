@@ -129,22 +129,14 @@ func downloadToTemp(url string) (string, error) {
 	if err != nil {
 		return "", errors.WithMessage(err, "failed to create temp file")
 	}
-	defer func() {
-		if err := tmpFile.Close(); err != nil {
-			panic(err)
-		}
-	}()
+	defer tmpFile.Close()
 
 	// Get the data
 	resp, err := client.Get(url)
 	if err != nil {
 		return "", errors.WithMessage(err, "failed to download file")
 	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			panic(err)
-		}
-	}()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", errors.Errorf("bad status: %s", resp.Status)
