@@ -158,30 +158,10 @@ func downloadToTemp(url string) (string, error) {
 	return tmpFile.Name(), nil
 }
 
-type ValidationResult struct {
-	Valid  bool   `json:"valid"`
-	Reason string `json:"reason,omitempty"`
-}
-
-func mainWithError() (*ValidationResult, error) {
-	fmt.Fprintf(os.Stderr, "Getting download link\n")
-
-	downloadURL, err := GetPortableDownloadLink()
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Printf("Download link: %s\n", downloadURL)
-	fmt.Fprintf(os.Stderr, "Downloading from %s\n", downloadURL)
-
-	path, err := downloadToTemp(downloadURL)
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Fprintf(os.Stderr, "File downloaded to: %s\n", path)
-
-	// Open the downloaded ZIP file
+// ValidateZipArchive extracts all files from a ZIP archive at the given path,
+// validating the Authenticode signature of every .exe and .dll file (excluding
+// those in skipCheck). It returns a ValidationResult summarizing the findings.
+func ValidateZipArchive(path string) (*ValidationResult, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -240,6 +220,37 @@ func mainWithError() (*ValidationResult, error) {
 	if len(failures) > 0 {
 		result.Valid = false
 		result.Reason = strings.Join(failures, "; ")
+	}
+
+	return result, nil
+}
+
+type ValidationResult struct {
+	Valid  bool   `json:"valid"`
+	Reason string `json:"reason,omitempty"`
+}
+
+func mainWithError() (*ValidationResult, error) {
+	fmt.Fprintf(os.Stderr, "Getting download link\n")
+
+	downloadURL, err := GetPortableDownloadLink()
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Download link: %s\n", downloadURL)
+	fmt.Fprintf(os.Stderr, "Downloading from %s\n", downloadURL)
+
+	path, err := downloadToTemp(downloadURL)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Fprintf(os.Stderr, "File downloaded to: %s\n", path)
+
+	result, err := ValidateZipArchive(path)
+	if err != nil {
+		return nil, err
 	}
 
 	return result, nil
