@@ -10,7 +10,7 @@ on:
 jobs:
   validate:
     name: Validate
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write
@@ -28,7 +28,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           workflow: build.yml
           branch: main
-          name: signature-validation-windows
+          name: signature-validation-linux
           check_artifacts: true
           search_artifacts: true
 
@@ -37,9 +37,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            ~\AppData\Local\ms-playwright
-            ~\AppData\Local\ms-playwright-go
-          key: playwright-win64-v0.5700.1
+            ~/.cache/ms-playwright
+            ~/.cache/ms-playwright-go
+          key: playwright-linux-v0.5700.1
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
@@ -49,30 +49,16 @@ jobs:
         id: run_validation
         continue-on-error: true
         run: |
-          $output = .\signature-validation.exe
-          $output | Out-File -FilePath status.json -Encoding utf8
-          $output
+          ./signature-validation | tee status.json
 
       - name: Parse validation result
         id: parse_result
         run: |
-          $obj = Get-Content status.json | ConvertFrom-Json
-
-          $errorOccurred = $false
-          $validationFailed = $false
-          $reason = ""
-
-          if ($obj.error) {
-            $errorOccurred = $true
-            $reason = $obj.error
-          } elseif ($obj.result -and $obj.result.valid -eq $false) {
-            $validationFailed = $true
-            $reason = $obj.result.reason
-          }
-
-          "error_occurred=$errorOccurred"     >> $env:GITHUB_OUTPUT
-          "validation_failed=$validationFailed" >> $env:GITHUB_OUTPUT
-          "validation_reason=$reason"         >> $env:GITHUB_OUTPUT
+          {
+            echo "error_occurred=$(jq -r 'if .error then "True" else "False" end' status.json)"
+            echo "validation_failed=$(jq -r 'if .result.valid == false then "True" else "False" end' status.json)"
+            echo "validation_reason=$(jq -r '.error // .result.reason // ""' status.json)"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Update status.json in validation-results
         id: update_status
