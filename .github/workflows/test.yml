@@ -33,7 +33,7 @@ jobs:
         run: go run github.com/playwright-community/playwright-go/cmd/playwright@v0.5700.1 install --with-deps --only-shell chromium
 
       - name: Get CA certs
-        run: sudo apt-get install -y ca-certificates-microsoft
+        run: sudo apt-get install -y ca-certificates
 
       - name: Run program
         run: go run .
