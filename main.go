@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/go-errors/errors"
+	"github.com/pkg/errors"
 	"github.com/playwright-community/playwright-go"
 )
 
@@ -130,7 +130,7 @@ func (sc *SignerCertificate) UnmarshalJSON(b []byte) error {
 		Alias: (*Alias)(sc),
 	}
 	if err := json.Unmarshal(b, &aux); err != nil {
-		return errors.New(err)
+		return errors.WithStack(err)
 	}
 
 	if len(sc.RawData) > 0 {
@@ -166,7 +166,7 @@ func (s *SubjectInfo) UnmarshalJSON(b []byte) error {
 func ExtractSubjectInfo(rawData []byte) (SubjectInfo, error) {
 	cert, err := x509.ParseCertificate(rawData)
 	if err != nil {
-		return SubjectInfo{}, errors.New(err)
+		return SubjectInfo{}, errors.WithStack(err)
 	}
 
 	info := SubjectInfo{
@@ -294,7 +294,7 @@ func mainWithError() (*ValidationResult, error) {
 
 	// Clean up
 	if err := os.Remove(path); err != nil {
-		return nil, errors.New(err)
+		return nil, errors.WithStack(err)
 	}
 	return &result, nil
 }
@@ -311,19 +311,13 @@ func main() {
 		Time: time.Now().UTC(),
 	}
 	if err != nil {
-		var goErr *errors.Error
-		if errors.As(err, &goErr) {
-			output.Error = goErr.ErrorStack()
-		} else {
-			output.Error = err.Error()
-		}
-		fmt.Fprintf(os.Stderr, "error: %v\n", output.Error)
+		fmt.Fprintf(os.Stderr, "error: %+v\n", output.Error)
 	} else {
 		output.Result = result
 	}
 
 	if err := json.NewEncoder(os.Stdout).Encode(output); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to encode output: %v\n", err)
+		fmt.Fprintf(os.Stderr, "failed to encode output: %+v\n", err)
 		os.Exit(1)
 	}
 
