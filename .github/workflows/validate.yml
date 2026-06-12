@@ -75,6 +75,7 @@ jobs:
 
       - name: Update status.json in validation-results
         id: update_status
+        if: ${{ github.event_name != 'push' }}
         uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
