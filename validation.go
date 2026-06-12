@@ -30,7 +30,10 @@ func getRootCertPool() (*x509.CertPool, error) {
 		return nil, errors.New("R3CSR45CROSS2020 not set")
 	}
 
-	roots := x509.NewCertPool()
+	roots, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
 	if !roots.AppendCertsFromPEM([]byte(pem)) {
 		return nil, errors.New("failed to parse R3CSR45CROSS2020 certificate")
 	}
