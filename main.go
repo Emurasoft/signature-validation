@@ -130,10 +130,14 @@ func mainWithError() (*ValidationResult, error) {
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+	}()
 
 	var result ValidationResult
-	if err := ValidatePESignature(f); err != nil {
+	if err := ValidateMSISignature(f); err != nil {
 		result = ValidationResult{
 			Valid:  false,
 			Reason: err.Error(),
