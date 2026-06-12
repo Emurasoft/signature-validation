@@ -55,6 +55,7 @@ jobs:
         id: run_validation
         continue-on-error: true
         run: |
+          set -o pipefail
           ./signature-validation | tee status.json
 
       - name: Parse validation result
