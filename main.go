@@ -16,16 +16,16 @@ import (
 // clicks the "Download Now" span, and returns the new URL.
 func ClickEmEditorDownload(page playwright.Page) (string, error) {
 	if _, err := page.Goto("https://www.emeditor.com/download/"); err != nil {
-		return "", errors.Errorf("failed to navigate to emeditor.com: %w", err)
+		return "", errors.WithMessage(err, "failed to navigate to emeditor.com")
 	}
 
 	// Get the URL on the install link
 	href, err := page.Locator("a[aria-label='Download Desktop Installer directly']").GetAttribute("href")
 	if err != nil {
-		return "", errors.Errorf("failed to read href for 'Download Desktop Installer directly': %w", err)
+		return "", errors.WithMessage(err, "failed to read href for 'Download Desktop Installer directly'")
 	}
 	if href == "" {
-		return "", errors.Errorf("'Download Desktop Installer directly' link has no href")
+		return "", errors.New("'Download Desktop Installer directly' link has no href")
 	}
 
 	// After navigation completes, return the current page URL.
@@ -36,7 +36,7 @@ func ClickEmEditorDownload(page playwright.Page) (string, error) {
 func GetDownloadLink() (string, error) {
 	pw, err := playwright.Run()
 	if err != nil {
-		return "", errors.Errorf("could not start Playwright: %w", err)
+		return "", errors.WithMessage(err, "could not start Playwright")
 	}
 	defer func() {
 		if err := pw.Stop(); err != nil {
@@ -46,7 +46,7 @@ func GetDownloadLink() (string, error) {
 
 	browser, err := pw.Chromium.Launch()
 	if err != nil {
-		return "", errors.Errorf("could not launch browser: %w", err)
+		return "", errors.WithMessage(err, "could not launch browser")
 	}
 	defer func() {
 		if err := browser.Close(); err != nil {
@@ -56,7 +56,7 @@ func GetDownloadLink() (string, error) {
 
 	page, err := browser.NewPage()
 	if err != nil {
-		return "", errors.Errorf("could not create page: %w", err)
+		return "", errors.WithMessage(err, "could not create page")
 	}
 
 	// Run the download click flow; ignore the URL, only surface errors.
@@ -73,7 +73,7 @@ func downloadToTemp(url string) (string, error) {
 	// Create a temporary file
 	tmpFile, err := os.CreateTemp("", "download-")
 	if err != nil {
-		return "", errors.Errorf("failed to create temp file: %w", err)
+		return "", errors.WithMessage(err, "failed to create temp file")
 	}
 	defer func() {
 		if err := tmpFile.Close(); err != nil {
@@ -84,7 +84,7 @@ func downloadToTemp(url string) (string, error) {
 	// Get the data
 	resp, err := client.Get(url)
 	if err != nil {
-		return "", errors.Errorf("failed to download file: %w", err)
+		return "", errors.WithMessage(err, "failed to download file")
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -98,7 +98,7 @@ func downloadToTemp(url string) (string, error) {
 
 	// Write the body to file
 	if _, err = io.Copy(tmpFile, resp.Body); err != nil {
-		return "", errors.Errorf("failed to save file: %w", err)
+		return "", errors.WithMessage(err, "failed to save file: %w")
 	}
 
 	return tmpFile.Name(), nil
