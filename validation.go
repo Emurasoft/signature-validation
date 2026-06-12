@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/x509"
+	"fmt"
 	"github.com/pkg/errors"
 	"github.com/sassoftware/relic/lib/authenticode"
 	"io"
@@ -9,7 +10,6 @@ import (
 	"slices"
 )
 
-//nolint:unused
 var skipCheck = map[string]bool{
 	"msvcp140.dll":               true,
 	"vcruntime140.dll":           true,
@@ -25,16 +25,15 @@ var skipCheck = map[string]bool{
 // R3CSR45CROSS2020 environment variable. When the env var is unset it falls
 // back to the system pool.
 func getRootCertPool() (*x509.CertPool, error) {
-	pem := os.Getenv("R3CSR45CROSS2020")
-	if pem == "" {
-		return nil, errors.New("R3CSR45CROSS2020 not set")
-	}
-
 	roots, err := x509.SystemCertPool()
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	if !roots.AppendCertsFromPEM([]byte(pem)) {
+
+	pem := os.Getenv("R3CSR45CROSS2020")
+	if pem == "" {
+		fmt.Fprintln(os.Stderr, "R3CSR45CROSS2020 variable not set")
+	} else if !roots.AppendCertsFromPEM([]byte(pem)) {
 		return nil, errors.New("failed to parse R3CSR45CROSS2020 certificate")
 	}
 	return roots, nil

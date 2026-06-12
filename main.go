@@ -1,15 +1,21 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/mholt/archives"
 	"github.com/pkg/errors"
 	"github.com/playwright-community/playwright-go"
+	"golang.org/x/net/html"
 )
 
 // ClickEmEditorDownload navigates to https://www.emeditor.com/,
@@ -32,8 +38,8 @@ func ClickEmEditorDownload(page playwright.Page) (string, error) {
 	return href, nil
 }
 
-// GetDownloadLink clicks on the Download Now button and returns the location of the redirect.
-func GetDownloadLink() (string, error) {
+// GetInstallerDownloadLink clicks on the Download Now button and returns the location of the redirect.
+func GetInstallerDownloadLink() (string, error) {
 	pw, err := playwright.Run()
 	if err != nil {
 		return "", errors.WithMessage(err, "could not start Playwright")
@@ -63,6 +69,54 @@ func GetDownloadLink() (string, error) {
 	return ClickEmEditorDownload(page)
 }
 
+// GetPortableDownloadLink scrapes the EmEditor download page for the Portable Version
+// download link and returns its href URL.
+func GetPortableDownloadLink() (string, error) {
+	resp, err := client.Get("https://www.emeditor.com/download/")
+	if err != nil {
+		return "", errors.WithMessage(err, "failed to fetch download page")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.Errorf("bad status: %s", resp.Status)
+	}
+
+	doc, err := html.Parse(resp.Body)
+	if err != nil {
+		return "", errors.WithMessage(err, "failed to parse HTML")
+	}
+
+	href, found := findPortableLink(doc)
+	if !found {
+		return "", errors.New("portable version link not found on download page")
+	}
+
+	return href, nil
+}
+
+// findPortableLink traverses the HTML tree looking for the anchor element
+// that links to the Portable Version download page.
+func findPortableLink(n *html.Node) (string, bool) {
+	if n.Type == html.ElementNode && n.Data == "a" {
+		for _, attr := range n.Attr {
+			if attr.Key == "href" && strings.Contains(attr.Val, "/en/downloads/latest/portable") {
+				if n.FirstChild != nil && n.FirstChild.Type == html.TextNode && strings.Contains(n.FirstChild.Data, "Portable Version") {
+					return attr.Val, true
+				}
+			}
+		}
+	}
+
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if href, found := findPortableLink(c); found {
+			return href, found
+		}
+	}
+
+	return "", false
+}
+
 var client = &http.Client{
 	Timeout: 20 * time.Second,
 }
@@ -75,22 +129,14 @@ func downloadToTemp(url string) (string, error) {
 	if err != nil {
 		return "", errors.WithMessage(err, "failed to create temp file")
 	}
-	defer func() {
-		if err := tmpFile.Close(); err != nil {
-			panic(err)
-		}
-	}()
+	defer tmpFile.Close()
 
 	// Get the data
 	resp, err := client.Get(url)
 	if err != nil {
 		return "", errors.WithMessage(err, "failed to download file")
 	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			panic(err)
-		}
-	}()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", errors.Errorf("bad status: %s", resp.Status)
@@ -104,50 +150,151 @@ func downloadToTemp(url string) (string, error) {
 	return tmpFile.Name(), nil
 }
 
+// ValidateZipArchive extracts all files from a ZIP archive at the given path,
+// validating the Authenticode signature of every .exe and .dll file (excluding
+// those in skipCheck). It returns a ValidationResult summarizing the findings.
+func ValidateZipArchive(path string) (*ValidationResult, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	defer f.Close()
+
+	ctx := context.Background()
+	var failures []string
+
+	err = archives.Zip{}.Extract(ctx, f, func(ctx context.Context, info archives.FileInfo) error {
+		name := info.NameInArchive
+		ext := strings.ToLower(filepath.Ext(name))
+
+		// Skip non-PE files
+		if ext != ".exe" && ext != ".dll" {
+			fmt.Fprintf(os.Stderr, "Skipping %s (not PE)\n", name)
+			return nil
+		}
+
+		// Skip files in skipCheck
+		if skipCheck[filepath.Base(name)] {
+			fmt.Fprintf(os.Stderr, "Skipping %s (in skipCheck)\n", name)
+			return nil
+		}
+
+		// Open the file from the archive
+		rc, err := info.Open()
+		if err != nil {
+			return errors.WithMessagef(err, "failed to open %s", name)
+		}
+		defer rc.Close()
+
+		// Read content into memory (ValidatePESignature needs io.ReadSeeker)
+		content, err := io.ReadAll(rc)
+		if err != nil {
+			return errors.WithMessagef(err, "failed to read %s", name)
+		}
+
+		// Validate PE signature
+		reader := bytes.NewReader(content)
+		if err := ValidatePESignature(reader); err != nil {
+			msg := fmt.Sprintf("%s: %v", name, err)
+			fmt.Fprintf(os.Stderr, "FAIL: %s\n", msg)
+			failures = append(failures, msg)
+			return nil // keep processing the rest
+		}
+
+		fmt.Fprintf(os.Stderr, "OK: %s\n", name)
+		return nil
+	})
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to extract archive")
+	}
+
+	result := &ValidationResult{Valid: true}
+	if len(failures) > 0 {
+		result.Valid = false
+		result.Reason = strings.Join(failures, "; ")
+	}
+
+	return result, nil
+}
+
 type ValidationResult struct {
 	Valid  bool   `json:"valid"`
 	Reason string `json:"reason,omitempty"`
 }
 
 func mainWithError() (*ValidationResult, error) {
-	fmt.Fprintf(os.Stderr, "Getting download link\n")
+	var failures []string
 
-	downloadURL, err := GetDownloadLink()
+	// --- Installer (MSI) check ---
+	fmt.Fprintf(os.Stderr, "Getting installer download link\n")
+
+	installerURL, err := GetInstallerDownloadLink()
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Fprintf(os.Stderr, "Downloading from %s\n", downloadURL)
+	fmt.Printf("Installer download link: %s\n", installerURL)
+	fmt.Fprintf(os.Stderr, "Downloading installer from %s\n", installerURL)
+
+	installerPath, err := downloadToTemp(installerURL)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Fprintf(os.Stderr, "Installer downloaded to: %s\n", installerPath)
+
+	installerFile, err := os.Open(installerPath)
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to open installer file")
+	}
+
+	fmt.Fprintf(os.Stderr, "Validating installer MSI signature\n")
+	if err := ValidateMSISignature(installerFile); err != nil {
+		msg := fmt.Sprintf("installer MSI: %v", err)
+		fmt.Fprintf(os.Stderr, "FAIL: %s\n", msg)
+		failures = append(failures, msg)
+	} else {
+		fmt.Fprintf(os.Stderr, "OK: installer signature valid\n")
+	}
+	installerFile.Close()
+
+	// --- Portable (ZIP) check ---
+	fmt.Fprintf(os.Stderr, "Getting portable download link\n")
+
+	downloadURL, err := GetPortableDownloadLink()
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Portable download link: %s\n", downloadURL)
+	fmt.Fprintf(os.Stderr, "Downloading portable from %s\n", downloadURL)
 
 	path, err := downloadToTemp(downloadURL)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Fprintf(os.Stderr, "File downloaded to: %s\n", path)
+	fmt.Fprintf(os.Stderr, "Portable downloaded to: %s\n", path)
 
-	f, err := os.Open(path)
+	zipResult, err := ValidateZipArchive(path)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-		}
-	}()
-
-	var result ValidationResult
-	if err := ValidateMSISignature(f); err != nil {
-		result = ValidationResult{
-			Valid:  false,
-			Reason: err.Error(),
-		}
+	if !zipResult.Valid {
+		msg := fmt.Sprintf("portable ZIP: %s", zipResult.Reason)
+		fmt.Fprintf(os.Stderr, "FAIL: %s\n", msg)
+		failures = append(failures, msg)
 	} else {
-		result = ValidationResult{Valid: true}
+		fmt.Fprintf(os.Stderr, "OK: portable signatures valid\n")
 	}
 
-	// Since it is run in CI and files are saved to temporary directory, the files are not removed at the end
-	return &result, nil
+	// --- Aggregate results ---
+	result := &ValidationResult{Valid: true}
+	if len(failures) > 0 {
+		result.Valid = false
+		result.Reason = strings.Join(failures, "; ")
+	}
+	return result, nil
 }
 
 type ProgramOutput struct {
