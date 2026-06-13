@@ -55,15 +55,6 @@ jobs:
           chmod +x ./signature-validation
           ./signature-validation | tee status.json
 
-      - name: Parse validation result
-        id: parse_result
-        run: |
-          {
-            echo "error_occurred=$(jq -r 'if .error then "True" else "False" end' status.json)"
-            echo "validation_failed=$(jq -r 'if .result.valid == false then "True" else "False" end' status.json)"
-            echo "validation_reason=$(jq -r '.error // .result.reason // ""' status.json)"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Update status.json in validation-results
         id: update_status
         uses: actions/github-script@v9
@@ -104,16 +95,26 @@ jobs:
             });
 
       - name: Create issue on failed validation
-        if: ${{ steps.parse_result.outputs.error_occurred == 'True' || steps.parse_result.outputs.validation_failed == 'True' }}
         uses: actions/github-script@v9
-        env:
-          VALIDATION_REASON:   ${{ steps.parse_result.outputs.validation_reason }}
-          ERROR_OCCURRED:      ${{ steps.parse_result.outputs.error_occurred }}
-          VALIDATION_FAILED:   ${{ steps.parse_result.outputs.validation_failed }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const fs = require('fs');
             const { owner, repo } = context.repo;
+
+            // Read and parse the validation result
+            const status = JSON.parse(fs.readFileSync('status.json', 'utf8'));
+            const errorOccurred = status.error && status.error !== '';
+            const validationFailed = !errorOccurred && (
+              (status.installer_result && status.installer_result.valid === false) ||
+              (status.portable_result && status.portable_result.valid === false)
+            );
+
+            // No issue needed if everything is fine
+            if (!errorOccurred && !validationFailed) {
+              core.info('Validation passed. No issue needed.');
+              return;
+            }
 
             // Check for existing issue
             const q = `repo:${owner}/${repo} "signature validation" in:title is:issue is:open`;
@@ -126,25 +127,25 @@ jobs:
 
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
 
-            const reason = process.env.VALIDATION_REASON || 'Unknown reason';
-            const errorOccurred = process.env.ERROR_OCCURRED === 'True';
-            const validationFailed = process.env.VALIDATION_FAILED === 'True';
-
-            let body;
+            let reason, body;
             if (errorOccurred) {
+              reason = status.error;
               body =
                 `@MakotoE, an error occurred while running signature validation.\n` +
                 `Error: ${reason}\n` +
                 `Run: ${runUrl}`;
-            } else if (validationFailed) {
+            } else {
+              const reasons = [];
+              if (status.installer_result?.valid === false) {
+                reasons.push(status.installer_result.reason || 'unknown installer failure');
+              }
+              if (status.portable_result?.valid === false) {
+                reasons.push(status.portable_result.reason || 'unknown portable failure');
+              }
+              reason = reasons.join('; ') || 'Unknown reason';
               body =
                 `@MakotoE, signature validation failed.\n` +
                 `Reason: ${reason}\n` +
-                `Run: ${runUrl}`;
-            } else {
-              body =
-                `@MakotoE, there was an issue with the workflow run.\n` +
-                `Details: ${reason}\n` +
                 `Run: ${runUrl}`;
             }
 

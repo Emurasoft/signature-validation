@@ -165,17 +165,9 @@ func ValidateZipArchive(path string) (*ValidationResult, error) {
 
 	err = archives.Zip{}.Extract(ctx, f, func(ctx context.Context, info archives.FileInfo) error {
 		name := info.NameInArchive
-		ext := strings.ToLower(filepath.Ext(name))
 
-		// Skip non-PE files
-		if ext != ".exe" && ext != ".dll" {
-			fmt.Fprintf(os.Stderr, "Skipping %s (not PE)\n", name)
-			return nil
-		}
-
-		// Skip files in skipCheck
-		if skipCheck[filepath.Base(name)] {
-			fmt.Fprintf(os.Stderr, "Skipping %s (in skipCheck)\n", name)
+		// Skip unknown files
+		if !filesToCheck[filepath.Base(name)] {
 			return nil
 		}
 
@@ -219,12 +211,15 @@ func ValidateZipArchive(path string) (*ValidationResult, error) {
 
 type ValidationResult struct {
 	Valid  bool   `json:"valid"`
-	Reason string `json:"reason,omitempty"`
+	Reason string `json:"reason"`
 }
 
-func mainWithError() (*ValidationResult, error) {
-	var failures []string
+type Result struct {
+	InstallerResult *ValidationResult `json:"installer_result"`
+	PortableResult  *ValidationResult `json:"portable_result"`
+}
 
+func mainWithError() (*Result, error) {
 	// --- Installer (MSI) check ---
 	fmt.Fprintf(os.Stderr, "Getting installer download link\n")
 
@@ -248,11 +243,12 @@ func mainWithError() (*ValidationResult, error) {
 		return nil, errors.WithMessage(err, "failed to open installer file")
 	}
 
+	installerResult := &ValidationResult{Valid: true}
 	fmt.Fprintf(os.Stderr, "Validating installer MSI signature\n")
 	if err := ValidateMSISignature(installerFile); err != nil {
-		msg := fmt.Sprintf("installer MSI: %v", err)
-		fmt.Fprintf(os.Stderr, "FAIL: %s\n", msg)
-		failures = append(failures, msg)
+		installerResult.Valid = false
+		installerResult.Reason = fmt.Sprintf("installer MSI: %v", err)
+		fmt.Fprintf(os.Stderr, "FAIL: %s\n", installerResult.Reason)
 	} else {
 		fmt.Fprintf(os.Stderr, "OK: installer signature valid\n")
 	}
@@ -276,31 +272,26 @@ func mainWithError() (*ValidationResult, error) {
 
 	fmt.Fprintf(os.Stderr, "Portable downloaded to: %s\n", path)
 
-	zipResult, err := ValidateZipArchive(path)
+	portableResult, err := ValidateZipArchive(path)
 	if err != nil {
 		return nil, err
 	}
-	if !zipResult.Valid {
-		msg := fmt.Sprintf("portable ZIP: %s", zipResult.Reason)
-		fmt.Fprintf(os.Stderr, "FAIL: %s\n", msg)
-		failures = append(failures, msg)
+	if !portableResult.Valid {
+		fmt.Fprintf(os.Stderr, "FAIL: portable ZIP: %s\n", portableResult.Reason)
 	} else {
 		fmt.Fprintf(os.Stderr, "OK: portable signatures valid\n")
 	}
 
-	// --- Aggregate results ---
-	result := &ValidationResult{Valid: true}
-	if len(failures) > 0 {
-		result.Valid = false
-		result.Reason = strings.Join(failures, "; ")
-	}
-	return result, nil
+	return &Result{
+		InstallerResult: installerResult,
+		PortableResult:  portableResult,
+	}, nil
 }
 
 type ProgramOutput struct {
-	Result *ValidationResult `json:"result,omitempty"`
-	Error  string            `json:"error,omitempty"`
-	Time   time.Time         `json:"time"`
+	*Result
+	Error string    `json:"error,omitempty"`
+	Time  time.Time `json:"time"`
 }
 
 func main() {
