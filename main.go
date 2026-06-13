@@ -211,12 +211,12 @@ func ValidateZipArchive(path string) (*ValidationResult, error) {
 
 type ValidationResult struct {
 	Valid  bool   `json:"valid"`
-	Reason string `json:"reason,omitempty"`
+	Reason string `json:"reason"`
 }
 
 type Result struct {
-	InstallerResult *ValidationResult `json:"installer_result,omitempty"`
-	PortableResult  *ValidationResult `json:"portable_result,omitempty"`
+	InstallerResult *ValidationResult `json:"installer_result"`
+	PortableResult  *ValidationResult `json:"portable_result"`
 }
 
 func mainWithError() (*Result, error) {
