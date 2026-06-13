@@ -165,17 +165,9 @@ func ValidateZipArchive(path string) (*ValidationResult, error) {
 
 	err = archives.Zip{}.Extract(ctx, f, func(ctx context.Context, info archives.FileInfo) error {
 		name := info.NameInArchive
-		ext := strings.ToLower(filepath.Ext(name))
 
-		// Skip non-PE files
-		if ext != ".exe" && ext != ".dll" {
-			fmt.Fprintf(os.Stderr, "Skipping %s (not PE)\n", name)
-			return nil
-		}
-
-		// Skip files in skipCheck
-		if skipCheck[filepath.Base(name)] {
-			fmt.Fprintf(os.Stderr, "Skipping %s (in skipCheck)\n", name)
+		// Skip unknown files
+		if !filesToCheck[filepath.Base(name)] {
 			return nil
 		}
 
