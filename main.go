@@ -14,59 +14,61 @@ import (
 
 	"github.com/mholt/archives"
 	"github.com/pkg/errors"
-	"github.com/playwright-community/playwright-go"
 	"golang.org/x/net/html"
 )
 
-// ClickEmEditorDownload navigates to https://www.emeditor.com/,
-// clicks the "Download Now" span, and returns the new URL.
-func ClickEmEditorDownload(page playwright.Page) (string, error) {
-	if _, err := page.Goto("https://www.emeditor.com/download/"); err != nil {
-		return "", errors.WithMessage(err, "failed to navigate to emeditor.com")
-	}
-
-	// Get the URL on the install link
-	href, err := page.Locator("a[aria-label='Download Desktop Installer directly']").GetAttribute("href")
+// GetInstallerDownloadLink scrapes the EmEditor download page for the Desktop Installer
+// download link and returns its href URL.
+func GetInstallerDownloadLink() (string, error) {
+	resp, err := client.Get("https://www.emeditor.com/download/")
 	if err != nil {
-		return "", errors.WithMessage(err, "failed to read href for 'Download Desktop Installer directly'")
+		return "", errors.WithMessage(err, "failed to fetch download page")
 	}
-	if href == "" {
-		return "", errors.New("'Download Desktop Installer directly' link has no href")
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.Errorf("bad status: %s", resp.Status)
 	}
 
-	// After navigation completes, return the current page URL.
+	doc, err := html.Parse(resp.Body)
+	if err != nil {
+		return "", errors.WithMessage(err, "failed to parse HTML")
+	}
+
+	href, found := findInstallerLink(doc)
+	if !found {
+		return "", errors.New("installer download link not found on download page")
+	}
+
 	return href, nil
 }
 
-// GetInstallerDownloadLink clicks on the Download Now button and returns the location of the redirect.
-func GetInstallerDownloadLink() (string, error) {
-	pw, err := playwright.Run()
-	if err != nil {
-		return "", errors.WithMessage(err, "could not start Playwright")
-	}
-	defer func() {
-		if err := pw.Stop(); err != nil {
-			fmt.Println(err)
+// findInstallerLink traverses the HTML tree looking for the anchor element
+// that has aria-label="Download Desktop Installer directly".
+func findInstallerLink(n *html.Node) (string, bool) {
+	if n.Type == html.ElementNode && n.Data == "a" {
+		var href string
+		hasLabel := false
+		for _, attr := range n.Attr {
+			if attr.Key == "aria-label" && attr.Val == "Download Desktop Installer directly" {
+				hasLabel = true
+			}
+			if attr.Key == "href" {
+				href = attr.Val
+			}
 		}
-	}()
-
-	browser, err := pw.Chromium.Launch()
-	if err != nil {
-		return "", errors.WithMessage(err, "could not launch browser")
-	}
-	defer func() {
-		if err := browser.Close(); err != nil {
-			fmt.Println(err)
+		if hasLabel && href != "" {
+			return href, true
 		}
-	}()
-
-	page, err := browser.NewPage()
-	if err != nil {
-		return "", errors.WithMessage(err, "could not create page")
 	}
 
-	// Run the download click flow; ignore the URL, only surface errors.
-	return ClickEmEditorDownload(page)
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if h, found := findInstallerLink(c); found {
+			return h, found
+		}
+	}
+
+	return "", false
 }
 
 // GetPortableDownloadLink scrapes the EmEditor download page for the Portable Version
