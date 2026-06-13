@@ -19,19 +19,6 @@ jobs:
         with:
           version: v2.11
 
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~\AppData\Local\ms-playwright
-            ~\AppData\Local\ms-playwright-go
-          key: playwright-win64-v0.5700.1
-
-      - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: go run github.com/playwright-community/playwright-go/cmd/playwright@v0.5700.1 install --with-deps --only-shell chromium
-
       - name: Run program
         env:
           R3CSR45CROSS2020: ${{ secrets.R3CSR45CROSS2020 }}
