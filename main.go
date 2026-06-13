@@ -221,8 +221,10 @@ type Result struct {
 	PortableResult  *ValidationResult `json:"portable_result"`
 }
 
-func mainWithError() (*Result, error) {
-	// --- Installer (MSI) check ---
+// validateInstaller fetches the installer download link, downloads the MSI, and
+// validates its Authenticode signature. Returns the validation result, or an error
+// if the download or link resolution fails.
+func validateInstaller() (*ValidationResult, error) {
 	fmt.Fprintf(os.Stderr, "Getting installer download link\n")
 
 	installerURL, err := GetInstallerDownloadLink()
@@ -241,6 +243,7 @@ func mainWithError() (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer os.Remove(installerPath)
 
 	fmt.Fprintf(os.Stderr, "Installer downloaded to: %s\n", installerPath)
 
@@ -248,19 +251,25 @@ func mainWithError() (*Result, error) {
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to open installer file")
 	}
+	defer installerFile.Close()
 
-	installerResult := &ValidationResult{Valid: true}
+	result := &ValidationResult{Valid: true}
 	fmt.Fprintf(os.Stderr, "Validating installer MSI signature\n")
 	if err := ValidateMSISignature(installerFile); err != nil {
-		installerResult.Valid = false
-		installerResult.Reason = fmt.Sprintf("installer MSI: %v", err)
-		fmt.Fprintf(os.Stderr, "FAIL: %s\n", installerResult.Reason)
+		result.Valid = false
+		result.Reason = fmt.Sprintf("installer MSI: %v", err)
+		fmt.Fprintf(os.Stderr, "FAIL: %s\n", result.Reason)
 	} else {
 		fmt.Fprintf(os.Stderr, "OK: installer signature valid\n")
 	}
-	installerFile.Close()
 
-	// --- Portable (ZIP) check ---
+	return result, nil
+}
+
+// validatePortable fetches the portable download link, downloads the ZIP, and
+// validates the Authenticode signature of every .exe and .dll inside. Returns
+// the validation result, or an error if the download or link resolution fails.
+func validatePortable() (*ValidationResult, error) {
 	fmt.Fprintf(os.Stderr, "Getting portable download link\n")
 
 	downloadURL, err := GetPortableDownloadLink()
@@ -279,6 +288,7 @@ func mainWithError() (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer os.Remove(path)
 
 	fmt.Fprintf(os.Stderr, "Portable downloaded to: %s\n", path)
 
@@ -290,6 +300,20 @@ func mainWithError() (*Result, error) {
 		fmt.Fprintf(os.Stderr, "FAIL: portable ZIP: %s\n", portableResult.Reason)
 	} else {
 		fmt.Fprintf(os.Stderr, "OK: portable signatures valid\n")
+	}
+
+	return portableResult, nil
+}
+
+func mainWithError() (*Result, error) {
+	installerResult, err := validateInstaller()
+	if err != nil {
+		return nil, err
+	}
+
+	portableResult, err := validatePortable()
+	if err != nil {
+		return nil, err
 	}
 
 	return &Result{
