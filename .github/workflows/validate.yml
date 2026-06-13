@@ -59,9 +59,15 @@ jobs:
         id: parse_result
         run: |
           {
-            echo "error_occurred=$(jq -r 'if .error then "True" else "False" end' status.json)"
-            echo "validation_failed=$(jq -r 'if .result.valid == false then "True" else "False" end' status.json)"
-            echo "validation_reason=$(jq -r '.error // .result.reason // ""' status.json)"
+            echo "error_occurred=$(jq -r 'if .error and .error != "" then "True" else "False" end' status.json)"
+            echo "validation_failed=$(jq -r 'if (.installer_result | .valid // true) == false or (.portable_result | .valid // true) == false then "True" else "False" end' status.json)"
+            echo "validation_reason=$(jq -r '
+              if .error and .error != "" then .error
+              else
+                [if (.installer_result | .valid // true) == false then (.installer_result.reason // "unknown installer failure") else empty end,
+                 if (.portable_result | .valid // true) == false then (.portable_result.reason // "unknown portable failure") else empty end]
+                | join("; ")
+              end' status.json)"
           } >> "$GITHUB_OUTPUT"
 
       - name: Update status.json in validation-results
