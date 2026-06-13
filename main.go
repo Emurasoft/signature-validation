@@ -230,6 +230,10 @@ func mainWithError() (*Result, error) {
 		return nil, err
 	}
 
+	if installerURL != "https://support.emeditor.com/en/downloads/latest/installer" {
+		return nil, errors.New("invalid installer url")
+	}
+
 	fmt.Printf("Installer download link: %s\n", installerURL)
 	fmt.Fprintf(os.Stderr, "Downloading installer from %s\n", installerURL)
 
@@ -262,6 +266,10 @@ func mainWithError() (*Result, error) {
 	downloadURL, err := GetPortableDownloadLink()
 	if err != nil {
 		return nil, err
+	}
+
+	if downloadURL != "https://support.emeditor.com/en/downloads/latest/portable" {
+		return nil, errors.New("invalid portable url")
 	}
 
 	fmt.Printf("Portable download link: %s\n", downloadURL)
