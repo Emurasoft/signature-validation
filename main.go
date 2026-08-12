@@ -44,21 +44,15 @@ func GetInstallerDownloadLink() (string, error) {
 }
 
 // findInstallerLink traverses the HTML tree looking for the anchor element
-// that has aria-label="Download Desktop Installer directly".
+// whose text contains "Legacy installer version".
 func findInstallerLink(n *html.Node) (string, bool) {
 	if n.Type == html.ElementNode && n.Data == "a" {
-		var href string
-		hasLabel := false
-		for _, attr := range n.Attr {
-			if attr.Key == "aria-label" && attr.Val == "Download Desktop Installer directly" {
-				hasLabel = true
+		if n.FirstChild != nil && n.FirstChild.Type == html.TextNode && strings.Contains(n.FirstChild.Data, "Legacy installer version") {
+			for _, attr := range n.Attr {
+				if attr.Key == "href" {
+					return attr.Val, true
+				}
 			}
-			if attr.Key == "href" {
-				href = attr.Val
-			}
-		}
-		if hasLabel && href != "" {
-			return href, true
 		}
 	}
 
@@ -103,7 +97,7 @@ func findPortableLink(n *html.Node) (string, bool) {
 	if n.Type == html.ElementNode && n.Data == "a" {
 		for _, attr := range n.Attr {
 			if attr.Key == "href" && strings.Contains(attr.Val, "/en/downloads/latest/portable") {
-				if n.FirstChild != nil && n.FirstChild.Type == html.TextNode && strings.Contains(n.FirstChild.Data, "Portable Version") {
+				if n.FirstChild != nil && n.FirstChild.Type == html.TextNode && strings.Contains(n.FirstChild.Data, "Portable version") {
 					return attr.Val, true
 				}
 			}
