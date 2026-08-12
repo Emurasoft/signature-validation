@@ -230,7 +230,7 @@ func validateInstaller() (*ValidationResult, error) {
 		return nil, errors.New("invalid installer url")
 	}
 
-	fmt.Printf("Installer download link: %s\n", installerURL)
+	fmt.Fprintf(os.Stderr, "Installer download link: %s\n", installerURL)
 	fmt.Fprintf(os.Stderr, "Downloading installer from %s\n", installerURL)
 
 	installerPath, err := downloadToTemp(installerURL)
@@ -275,7 +275,7 @@ func validatePortable() (*ValidationResult, error) {
 		return nil, errors.New("invalid portable url")
 	}
 
-	fmt.Printf("Portable download link: %s\n", downloadURL)
+	fmt.Fprintf(os.Stderr, "Portable download link: %s\n", downloadURL)
 	fmt.Fprintf(os.Stderr, "Downloading portable from %s\n", downloadURL)
 
 	path, err := downloadToTemp(downloadURL)
