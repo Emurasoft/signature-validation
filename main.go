@@ -97,7 +97,7 @@ func findPortableLink(n *html.Node) (string, bool) {
 	if n.Type == html.ElementNode && n.Data == "a" {
 		for _, attr := range n.Attr {
 			if attr.Key == "href" && strings.Contains(attr.Val, "/en/downloads/latest/portable") {
-				if n.FirstChild != nil && n.FirstChild.Type == html.TextNode && strings.Contains(n.FirstChild.Data, "Portable Version") {
+				if n.FirstChild != nil && n.FirstChild.Type == html.TextNode && strings.Contains(n.FirstChild.Data, "Portable version") {
 					return attr.Val, true
 				}
 			}
