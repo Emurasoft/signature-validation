@@ -1,1 +1,1 @@
-{"installer_result":{"valid":true,"reason":""},"portable_result":{"valid":true,"reason":""},"time":"2026-09-09T11:59:43.129001922Z"}
+{"error":"could not start Playwright: please install the driver (v1.57.0) first","time":"2026-09-09T16:55:02.764961992Z"}
