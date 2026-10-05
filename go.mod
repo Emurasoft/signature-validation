@@ -43,4 +43,7 @@ require (
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+	gopkg.in/eapache/go-resiliency.v1 v1.2.0 // indirect
+	gopkg.in/h2non/gentleman-retry.v2 v2.0.1 // indirect
+	gopkg.in/h2non/gentleman.v2 v2.0.5 // indirect
 )
