@@ -15,7 +15,22 @@ import (
 	"github.com/mholt/archives"
 	"github.com/pkg/errors"
 	"golang.org/x/net/html"
+	"gopkg.in/eapache/go-resiliency.v1/retrier"
+	retry "gopkg.in/h2non/gentleman-retry.v2"
+	"gopkg.in/h2non/gentleman.v2"
+	"gopkg.in/h2non/gentleman.v2/plugins/timeout"
 )
+
+func GetHTTPClient() *gentleman.Client {
+	retryPlugin := retry.New(retrier.New(retrier.ExponentialBackoff(5, 100*time.Millisecond), nil))
+
+	return gentleman.New().
+		Use(timeout.All(timeout.Timeouts{
+			Request: time.Second * 30,
+			Dial:    time.Second * 10,
+		})).
+		Use(retryPlugin)
+}
 
 // GetInstallerDownloadLink scrapes the EmEditor download page for the Desktop Installer
 // download link and returns its href URL.
