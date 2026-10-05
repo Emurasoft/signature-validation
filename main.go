@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -346,7 +346,7 @@ func main() {
 		output.Result = result
 	}
 
-	if err := json.NewEncoder(os.Stdout).Encode(output); err != nil {
+	if err := json.MarshalWrite(os.Stdout, output); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to encode output: %+v\n", err)
 		os.Exit(1)
 	}
