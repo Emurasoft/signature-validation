@@ -22,11 +22,11 @@ import (
 )
 
 func GetHTTPClient() *gentleman.Client {
-	retryPlugin := retry.New(retrier.New(retrier.ExponentialBackoff(5, 100*time.Millisecond), nil))
+	retryPlugin := retry.New(retrier.New(retrier.ExponentialBackoff(5, time.Second), nil))
 
 	return gentleman.New().
 		Use(timeout.All(timeout.Timeouts{
-			Request: time.Second * 30,
+			Request: time.Minute * 4,
 			Dial:    time.Second * 10,
 		})).
 		Use(retryPlugin)
