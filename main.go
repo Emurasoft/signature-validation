@@ -35,17 +35,17 @@ func GetHTTPClient() *gentleman.Client {
 // GetInstallerDownloadLink scrapes the EmEditor download page for the Desktop Installer
 // download link and returns its href URL.
 func GetInstallerDownloadLink() (string, error) {
-	resp, err := client.Get("https://www.emeditor.com/download/")
+	resp, err := GetHTTPClient().Get().URL("https://www.emeditor.com/download/").Do()
 	if err != nil {
 		return "", errors.WithMessage(err, "failed to fetch download page")
 	}
-	defer resp.Body.Close()
+	defer resp.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", errors.Errorf("bad status: %s", resp.Status)
+		return "", errors.Errorf("bad status: %s", resp.RawResponse.Status)
 	}
 
-	doc, err := html.Parse(resp.Body)
+	doc, err := html.Parse(resp)
 	if err != nil {
 		return "", errors.WithMessage(err, "failed to parse HTML")
 	}
@@ -83,17 +83,17 @@ func findInstallerLink(n *html.Node) (string, bool) {
 // GetPortableDownloadLink scrapes the EmEditor download page for the Portable Version
 // download link and returns its href URL.
 func GetPortableDownloadLink() (string, error) {
-	resp, err := client.Get("https://www.emeditor.com/download/")
+	resp, err := GetHTTPClient().Get().URL("https://www.emeditor.com/download/").Do()
 	if err != nil {
 		return "", errors.WithMessage(err, "failed to fetch download page")
 	}
-	defer resp.Body.Close()
+	defer resp.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", errors.Errorf("bad status: %s", resp.Status)
+		return "", errors.Errorf("bad status: %s", resp.RawResponse.Status)
 	}
 
-	doc, err := html.Parse(resp.Body)
+	doc, err := html.Parse(resp)
 	if err != nil {
 		return "", errors.WithMessage(err, "failed to parse HTML")
 	}
@@ -128,10 +128,6 @@ func findPortableLink(n *html.Node) (string, bool) {
 	return "", false
 }
 
-var client = &http.Client{
-	Timeout: 20 * time.Second,
-}
-
 // downloadToTemp downloads a file from the given URL to a temporary directory.
 // It returns the path to the temporary file.
 func downloadToTemp(url string) (string, error) {
@@ -143,18 +139,18 @@ func downloadToTemp(url string) (string, error) {
 	defer tmpFile.Close()
 
 	// Get the data
-	resp, err := client.Get(url)
+	resp, err := GetHTTPClient().Get().URL(url).Do()
 	if err != nil {
 		return "", errors.WithMessage(err, "failed to download file")
 	}
-	defer resp.Body.Close()
+	defer resp.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", errors.Errorf("bad status: %s", resp.Status)
+		return "", errors.Errorf("bad status: %s", resp.RawResponse.Status)
 	}
 
 	// Write the body to file
-	if _, err = io.Copy(tmpFile, resp.Body); err != nil {
+	if _, err = io.Copy(tmpFile, resp); err != nil {
 		return "", errors.WithMessage(err, "failed to save file: %w")
 	}
 
